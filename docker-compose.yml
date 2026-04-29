@@ -26,6 +26,8 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - IMMICH_API_KEY=${IMMICH_API_KEY}
       - IMMICH_URL=${IMMICH_URL:-http://immich_server:2283}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-opus-4-5}
+      - SERVICE_API_KEY=${CARD_MAKER_API_KEY}
     networks:
       - proxy
       - immich_default
@@ -37,9 +39,10 @@ services:
     environment:
       - ANKI_DB_PATH=${ANKI_DB_PATH:-/anki-data/collection.anki2}
       - ANKI_SYNC_CONTAINER=${ANKI_SYNC_CONTAINER:-anki-sync}
+      - SERVICE_API_KEY=${ANKI_API_KEY}
     volumes:
       - anki_data:/anki-data
-      - /var/run/docker.sock:/var/run/docker.sock  # needed to stop/start anki-sync
+      - /var/run/docker.sock:/var/run/docker.sock  # needed to stop/start anki-sync; see README for docker-socket-proxy hardening
     networks:
       - proxy
 
@@ -84,7 +87,7 @@ services:
       - vaultwarden_data:/data
     environment:
       - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
-      - SIGNUPS_ALLOWED=true
+      - SIGNUPS_ALLOWED=false
       - DOMAIN=${VAULTWARDEN_DOMAIN}
     networks:
       - proxy
