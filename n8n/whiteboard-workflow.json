@@ -1,0 +1,73 @@
+{
+  "name": "Whiteboard → Anki Cards",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 1 }] }
+      },
+      "name": "Every Minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://immich_server:2283/api/albums/YOUR_ALBUM_ID",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "YOUR_IMMICH_API_KEY" }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Get Album",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const assets = $input.item.json.assets || [];\nconst cutoff = new Date(Date.now() - 2 * 60 * 1000);\nconst fresh = assets.filter(a => new Date(a.createdAt) > cutoff);\nif (fresh.length === 0) return [];\nreturn fresh.map(a => ({ json: { assetId: a.id } }));"
+      },
+      "name": "Filter Fresh",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://card-maker:8766/process",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"assetId\": \"{{$json.assetId}}\", \"deck\": \"Lectures\"}",
+        "options": {}
+      },
+      "name": "Generate Cards",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://anki-api:8765/cards",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ cards: $json.cards.map(c => ({ front: c.front, back: c.back })), topic: $json.topic }) }}",
+        "options": {}
+      },
+      "name": "Save to Anki",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Every Minute": { "main": [[{ "node": "Get Album", "type": "main", "index": 0 }]] },
+    "Get Album": { "main": [[{ "node": "Filter Fresh", "type": "main", "index": 0 }]] },
+    "Filter Fresh": { "main": [[{ "node": "Generate Cards", "type": "main", "index": 0 }]] },
+    "Generate Cards": { "main": [[{ "node": "Save to Anki", "type": "main", "index": 0 }]] }
+  }
+}

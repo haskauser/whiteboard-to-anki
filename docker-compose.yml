@@ -1,0 +1,152 @@
+services:
+
+  # ── Reverse proxy ──────────────────────────────────────────────
+  caddy:
+    build: ./caddy
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+    networks:
+      - proxy
+
+  # ── Whiteboard → Anki pipeline ─────────────────────────────────
+  card-maker:
+    build: ./card-maker
+    container_name: card-maker
+    restart: unless-stopped
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - IMMICH_API_KEY=${IMMICH_API_KEY}
+      - IMMICH_URL=${IMMICH_URL:-http://immich_server:2283}
+    networks:
+      - proxy
+      - immich_default
+
+  anki-api:
+    build: ./anki-api
+    container_name: anki-api
+    restart: unless-stopped
+    environment:
+      - ANKI_DB_PATH=${ANKI_DB_PATH:-/anki-data/collection.anki2}
+      - ANKI_SYNC_CONTAINER=${ANKI_SYNC_CONTAINER:-anki-sync}
+    volumes:
+      - anki_data:/anki-data
+      - /var/run/docker.sock:/var/run/docker.sock  # needed to stop/start anki-sync
+    networks:
+      - proxy
+
+  # ── Automation ─────────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    environment:
+      - N8N_HOST=${N8N_HOST}
+      - N8N_PROTOCOL=https
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
+      - WEBHOOK_URL=https://${N8N_HOST}
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+    networks:
+      - proxy
+
+  # ── Anki sync server ───────────────────────────────────────────
+  anki-sync:
+    image: ghcr.io/ankitects/anki:latest
+    container_name: anki-sync
+    restart: unless-stopped
+    volumes:
+      - anki_data:/data
+    environment:
+      - SYNC_USER1=${ANKI_USER}:${ANKI_PASSWORD}
+    networks:
+      - proxy
+
+  # ── Supporting services ────────────────────────────────────────
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    volumes:
+      - vaultwarden_data:/data
+    environment:
+      - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
+      - SIGNUPS_ALLOWED=true
+      - DOMAIN=${VAULTWARDEN_DOMAIN}
+    networks:
+      - proxy
+
+  couchdb:
+    image: couchdb:3
+    container_name: couchdb
+    restart: unless-stopped
+    volumes:
+      - couchdb_data:/opt/couchdb/data
+    environment:
+      - COUCHDB_USER=${COUCHDB_USER}
+      - COUCHDB_PASSWORD=${COUCHDB_PASSWORD}
+    networks:
+      - proxy
+
+  paperless-redis:
+    image: redis:7-alpine
+    container_name: paperless-redis
+    restart: unless-stopped
+    volumes:
+      - paperless_redis:/data
+
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless
+    restart: unless-stopped
+    depends_on:
+      - paperless-redis
+    volumes:
+      - paperless_data:/usr/src/paperless/data
+      - paperless_media:/usr/src/paperless/media
+    environment:
+      - PAPERLESS_REDIS=redis://paperless-redis:6379
+      - PAPERLESS_SECRET_KEY=${PAPERLESS_SECRET_KEY}
+      - PAPERLESS_ADMIN_USER=${PAPERLESS_ADMIN_USER}
+      - PAPERLESS_ADMIN_PASSWORD=${PAPERLESS_ADMIN_PASSWORD}
+      - PAPERLESS_URL=${PAPERLESS_URL}
+      - PAPERLESS_TIME_ZONE=Europe/London
+    networks:
+      - proxy
+
+  excalidraw:
+    image: excalidraw/excalidraw:latest
+    container_name: excalidraw
+    restart: unless-stopped
+    networks:
+      - proxy
+
+volumes:
+  caddy_data:
+  caddy_config:
+  anki_data:
+  n8n_data:
+  vaultwarden_data:
+  couchdb_data:
+  paperless_redis:
+  paperless_data:
+  paperless_media:
+
+networks:
+  proxy:
+    name: proxy
+  immich_default:
+    external: true  # created by Immich's own compose stack

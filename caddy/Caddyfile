@@ -1,0 +1,47 @@
+# Snippet for DNS-01 TLS via Cloudflare (required if ports 80/443 are blocked)
+# Remove this and use plain `tls` if your server has direct internet access on 80/443
+(tls_cloudflare) {
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+        ca https://acme-v02.api.letsencrypt.org/directory
+        resolvers 1.1.1.1
+    }
+}
+
+# Replace your.domain.com with your actual domain throughout
+
+obsidian.your.domain.com {
+    import tls_cloudflare
+    reverse_proxy couchdb:5984
+}
+
+anki.your.domain.com {
+    import tls_cloudflare
+    reverse_proxy anki-sync:8080
+}
+
+vault.your.domain.com {
+    import tls_cloudflare
+    reverse_proxy vaultwarden:80
+}
+
+docs.your.domain.com {
+    import tls_cloudflare
+    reverse_proxy paperless:8000
+}
+
+flow.your.domain.com {
+    import tls_cloudflare
+    reverse_proxy n8n:5678
+}
+
+photos.your.domain.com {
+    import tls_cloudflare
+    reverse_proxy immich_server:2283
+}
+
+your.domain.com {
+    import tls_cloudflare
+    root * /srv/dashboard
+    file_server
+}
